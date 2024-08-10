@@ -1,0 +1,7 @@
+README.md
+setup.py
+fasttag/fasttag.c
+fasttag.egg-info/PKG-INFO
+fasttag.egg-info/SOURCES.txt
+fasttag.egg-info/dependency_links.txt
+fasttag.egg-info/top_level.txt
