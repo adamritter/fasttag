@@ -130,11 +130,11 @@ def to_xml(elm, lvl=0):
 ## Benchmark:
 
 ```
-              fasttag latency:  0.16us      1x
-     join+html.escape latency:  0.45us      3x
-             dominate latency:  2.92us     18x
-             fasthtml latency:  3.23us     20x
-                 lxml latency:  1.66us     10x
-join without escaping latency:  0.12us   0.75x
+              fasttag latency:  0.17us      1x
+     join+html.escape latency:  0.53us      3x
+             dominate latency:  3.89us     23x
+             fasthtml latency:  4.99us     29x
+                 lxml latency:  1.69us     10x
+               jinja2 latency:  6.83us     40x
 ```
 

@@ -331,8 +331,11 @@ static PyObject* fasttag_tag_impl(const char* tag, PyObject* args, char skip_fir
 
             result[l++] = ' ';
             const char *key_str = PyUnicode_AsUTF8(key);
+
             if (key_str[0] == '_') {
-                key_str++;
+                if (key_str[1] != '\0') {
+                    key_str++;
+                }
                 while (*key_str) {
                     result[l++] = *(key_str++);
                 }
@@ -414,6 +417,10 @@ static PyObject* fasttag_tag_impl(const char* tag, PyObject* args, char skip_fir
             disable_indent = 0;
         }
     }
+    if((skip_first ? 1 : 0) == num_args) {
+        disable_indent = 1;
+    }
+
     for (Py_ssize_t i = (skip_first ? 1 : 0); i < num_args; i++) {
         if (indent >= 0 && !disable_indent) {
             result[l++] = '\n';
