@@ -166,11 +166,16 @@ static PyNumberMethods HTML_as_number = {
 };
 
 
+static PyObject* HTML_self(PyObject* self) {
+    Py_INCREF(self);
+    return self;
+}
 
 // Method table for the custom type
 static PyMethodDef HTML_methods[] = {
     {"bytes", (PyCFunction)HTML_bytes, METH_NOARGS, "Return the data attribute"},
-
+    {"__html__", (PyCFunction)HTML_str, METH_NOARGS, "Return the data attribute as string"},
+    {"__ft__", (PyCFunction)HTML_self, METH_NOARGS, "Return self"},
     {NULL} // Sentinel
 };
 
@@ -191,8 +196,6 @@ static PyTypeObject HTML_Type = {
     .tp_as_number = &HTML_as_number,
     .tp_richcompare = HTML_richcompare,
 };
-
-
 
 int indent = 2;
 

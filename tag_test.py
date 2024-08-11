@@ -25,6 +25,7 @@ assert_equal(Div(HTML("aa")), HTML("<div>\n  aa\n</div>"))
 assert_equal(Text("This is an <example> of text"), HTML("This is an &lt;example> of text"))
 assert_equal(DOCTYPE, HTML("<!DOCTYPE html>\n"))
 assert_equal(Div(_="value"), HTML('<div _="value"></div>'))
+assert_equal(Div(_="value").__html__(), '<div _="value"></div>')
 
 
 print(

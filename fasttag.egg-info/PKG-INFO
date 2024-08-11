@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: fasttag
-Version: 0.1.1
+Version: 0.1.2
 Summary: Extremely fast HTML tag generator
 Home-page: https://github.com/adamritter/fasttag
 Author: Adam Ritter
@@ -116,7 +116,7 @@ Div("hello", Span("world"))
 ## Using with FastHTML:
 FastTag was built to be mostly mirror FastHTML API. One important missing feature is automatically concatenating tuples.
 
-To use it, import fasttag after fasthtml.common:
+To use it, just import fasttag after fasthtml.common:
 
 ```python
 from fasthtml.common import *
@@ -125,30 +125,17 @@ from fasttag import *
 
 Also when returning data inside a handler, use ```.bytes()``` to convert it into ```bytes``` object.
 
-Right now  ``to_xml()`` inside ```FastCore``` needs a modification: https://github.com/fastai/fastcore/pull/597
-
-It's a one line change in to_xml() inside xml.py:
-
-```python
-def to_xml(elm, lvl=0):
-    "Convert `ft` element tree into an XML string"
-    if elm is None: return ''
-    if isinstance(elm, tuple): return '\n'.join(to_xml(o) for o in elm)
-    if hasattr(elm, '__ft__'): elm = elm.__ft__()
-    if isinstance(elm, bytes): return elm.decode('utf-8')  # This line needs to be inserted
-    sp = ' ' * lvl
-    if not isinstance(elm, list): return f'{_escape(elm)}\n'
-```
+```.__html__()``` returns the HTML as string, and ```.__ft()__``` returns the object itself (identity method) for compatibility with FastHTML.
 
 
 ## Benchmark:
 
 ```
-              fasttag latency:  0.16us      1x
-     join+html.escape latency:  0.45us      3x
-             dominate latency:  2.92us     18x
-             fasthtml latency:  3.23us     20x
-                 lxml latency:  1.66us     10x
-join without escaping latency:  0.12us   0.75x
+              fasttag latency:  0.17us      1x
+     join+html.escape latency:  0.53us      3x
+             dominate latency:  3.89us     23x
+             fasthtml latency:  4.99us     29x
+                 lxml latency:  1.69us     10x
+               jinja2 latency:  6.83us     40x
 ```
 
