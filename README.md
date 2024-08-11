@@ -100,7 +100,7 @@ Div("hello", Span("world"))
 ```
 
 ## Using with FastHTML:
-FastTag was built to be mostly mirror FastHTML API. One important missing feature is automatically concatenating tuples.
+FastTag was built to mostly mirror FastHTML API. One important missing feature is automatically concatenating tuples.
 
 To use it, just import fasttag after fasthtml.common:
 
