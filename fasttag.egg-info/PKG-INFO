@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: fasttag
-Version: 0.1.3
+Version: 0.1.4
 Summary: Extremely fast HTML tag generator
 Home-page: https://github.com/adamritter/fasttag
 Author: Adam Ritter

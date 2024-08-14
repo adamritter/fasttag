@@ -294,18 +294,19 @@ int estimate_object_length(PyObject* obj) {
     }
 }
 
-int reserve(int new_size, HTMLObject** result_obj, int *reserved, char** result) {
+void reserve(int new_size, HTMLObject** result_obj, int *reserved, char** result) {
     if (new_size > *reserved) {
         *reserved = 4 * new_size;
         // printf("Resizing to %d\n", *reserved);
         *result_obj = (HTMLObject*)PyObject_Realloc(
-            *result_obj, _PyObject_SIZE(&HTML_Type) + *reserved);
+            *result_obj, _PyObject_SIZE(&HTML_Type) +  *reserved);
         if (!*result_obj) {
-            return 0;
+            printf("Failed to allocate memory for data\n");
+            PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for data");
+            return;
         }
         *result = (*result_obj)->data;
     }
-    return 1;
 }
 
 void append_item_to_html(int* l, PyObject* item, int indent, char disable_indent, int i,
@@ -323,7 +324,10 @@ void append_item_to_html(int* l, PyObject* item, int indent, char disable_indent
             item_str = html_obj->data;
             size = html_obj->size;
         }
-        reserve(*l + size + 22 + (indent >=0 ? indent : 0), result_obj, reserved, result);
+        reserve(*l + size  * (indent >=1 ? indent : 1) + 22, result_obj, reserved, result);
+        if (!*result_obj) {
+            return;
+        }
         if (indent >= 0) {
             for (int j = 0; j < size; j++) {
                 (*result)[(*l)++] = item_str[j];
@@ -367,6 +371,9 @@ void append_item_to_html(int* l, PyObject* item, int indent, char disable_indent
             (*result)[(*l)++] = '\n';
             PyObject* subitem = PyTuple_GetItem(item, j);
             append_item_to_html(l, subitem, indent, disable_indent, i, result_obj, reserved, result);
+            if (!*result_obj) {
+                return;
+            }
         }
     } else {
         if (indent < 0 && i > 1) {
@@ -384,6 +391,9 @@ void append_item_to_html(int* l, PyObject* item, int indent, char disable_indent
         const char* item_str = PyUnicode_AsUTF8(item);
         int size = strlen(item_str);
         reserve(*l + size*(indent >=4 ? indent : 4) + 22, result_obj, reserved, result);
+        if (!*result_obj) {
+            return;
+        }
 
         if (indent > 0 && !disable_indent) {
             for (int j = 0; item_str[j] != '\0'; j++) {
@@ -462,6 +472,9 @@ static PyObject* fasttag_tag_impl(const char* tag, PyObject* args, char skip_fir
     result[l++] = '<';
     int extra = 22 + (indent >= 0 ? indent : 0);
     reserve(strlen(tag) + l, &result_obj, &reserved, &result);
+    if (!result_obj) {
+        return NULL;
+    }
     char *tagp = (char*)tag;
     while (*tagp) {
         result[l++] = *(tagp++);
@@ -479,6 +492,9 @@ static PyObject* fasttag_tag_impl(const char* tag, PyObject* args, char skip_fir
             result[l++] = ' ';
             const char *key_str = PyUnicode_AsUTF8(key);
             reserve(strlen(key_str) + l + extra, &result_obj, &reserved, &result);
+            if (!result_obj) {
+                return NULL;
+            }
 
             if (key_str[0] == '_') {
                 if (key_str[1] != '\0') {
@@ -531,6 +547,9 @@ static PyObject* fasttag_tag_impl(const char* tag, PyObject* args, char skip_fir
                 }
                 const char *value_str = PyUnicode_AsUTF8(value);
                 reserve(strlen(value_str)*5 + l + extra, &result_obj, &reserved, &result);
+                if (!result_obj) {
+                    return NULL;
+                }
                 while (*value_str) {
                     // handle " and &
                     if (*value_str == '&') {
@@ -595,6 +614,9 @@ static PyObject* fasttag_tag_impl(const char* tag, PyObject* args, char skip_fir
         }
         PyObject* item = PyTuple_GetItem(args, i);
         append_item_to_html(&l, item, indent, disable_indent, i, &result_obj, &reserved, &result);
+        if (!result_obj) {
+            return NULL;
+        }
     }
     if (!is_self_closing_tag(tag)) {
         if (indent >= 0 && !disable_indent) {
