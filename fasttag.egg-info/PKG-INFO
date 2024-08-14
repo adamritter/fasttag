@@ -127,7 +127,7 @@ Div("hello", Span("world"))
 ```
 
 ## Using with FastHTML:
-FastTag was built to mostly mirror FastHTML API. One important missing feature is automatically concatenating tuples / convert all data types with str().
+FastTag was built to mostly mirror FastHTML API.
 
 To use it, just import fasttag after fasthtml.common:
 
@@ -156,6 +156,7 @@ Also when returning data inside a handler, use ```.bytes()``` to convert it into
 ## TODO:
 Some missing features:
 - Large table benchmarks with headers
+- Comformance test vs FastHTML
 - svg namespace
-- attrs should get attributes
-- children should extract children from text
+- parsing: attrs should get attributes
+- parsing: children should extract children from text

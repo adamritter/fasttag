@@ -296,10 +296,8 @@ int estimate_object_length(PyObject* obj) {
 
 int reserve(int new_size, HTMLObject** result_obj, int *reserved, char** result) {
     if (new_size > *reserved) {
-        *reserved = 4 * (*reserved);
-        if (*reserved < new_size) {
-            *reserved = 4 * new_size;
-        }
+        *reserved = 4 * new_size;
+        // printf("Resizing to %d\n", *reserved);
         *result_obj = (HTMLObject*)PyObject_Realloc(
             *result_obj, _PyObject_SIZE(&HTML_Type) + *reserved);
         if (!*result_obj) {
@@ -385,7 +383,7 @@ void append_item_to_html(int* l, PyObject* item, int indent, char disable_indent
         }
         const char* item_str = PyUnicode_AsUTF8(item);
         int size = strlen(item_str);
-        reserve(*l + size*(indent >=4 ? indent : 4) + 22 , result_obj, reserved, result);
+        reserve(*l + size*(indent >=4 ? indent : 4) + 22, result_obj, reserved, result);
 
         if (indent > 0 && !disable_indent) {
             for (int j = 0; item_str[j] != '\0'; j++) {
@@ -523,14 +521,16 @@ static PyObject* fasttag_tag_impl(const char* tag, PyObject* args, char skip_fir
                 }
             } else {
                 // convert to string if necessary
+                int converted = 0;
                 if (!PyUnicode_Check(value)) {
                     value = PyObject_Str(value);
                     if (!value) {
                         return NULL;
                     }
+                    converted = 1;
                 }
                 const char *value_str = PyUnicode_AsUTF8(value);
-                reserve(strlen(value_str)*4 + l + extra, &result_obj, &reserved, &result);
+                reserve(strlen(value_str)*5 + l + extra, &result_obj, &reserved, &result);
                 while (*value_str) {
                     // handle " and &
                     if (*value_str == '&') {
@@ -551,7 +551,7 @@ static PyObject* fasttag_tag_impl(const char* tag, PyObject* args, char skip_fir
                     }
                     value_str++;
                 }
-                if (PyUnicode_Check(value)) {
+                if (converted) {
                     Py_DECREF(value);
                 }
             }
