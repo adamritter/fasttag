@@ -36,10 +36,14 @@ assert_equal(fasthtml.common.to_xml(fasthtml.common.Div("Hello &", "world <3")),
 assert_equal(lxml_text_div(), b'<div>Hello &amp; world &lt;3</div>')
 assert_equal(template.render(text="Hello &", text2="world <3"), "<div>Hello &amp; world &lt;3</div>")
 
+b200 = "q" * 195
+print("         fasttag200 latency: ", latency1000000(lambda: fasttag.Div(b200).bytes()), "us")
+
 print("         fasttag latency: ", latency1000000(lambda: fasttag.Div("Hello &", "world <3").bytes()), "us")
 print("join+html.escape latency: ", latency1000000(lambda: "".join(["<div>", html.escape("Hello &"), html.escape(" world <3"), "</div>"])), "us")
 print("        dominate latency: ", latency1000000(lambda: str(dominate.tags.div("Hello &", "world <3"))), "us")
 print("        fasthtml latency: ", latency1000000(lambda: fasthtml.common.to_xml(fasthtml.common.Div("Hello &", "world <3"))), "us")
 print("            lxml latency:", latency1000000(lambda: lxml_text_div()), "us")
 print("         jinja2 latency: ", latency1000000(lambda: template.render(text="Hello &", text2="world <3")), "us")
+
 

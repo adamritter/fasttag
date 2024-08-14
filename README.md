@@ -56,6 +56,14 @@ Numeric values are quoted.
     # => HTML('<input type="checkbox" id="scales" name="scales" checked>')
 ```
 
+Values in attributes and children are converted to string automatically. The only exception is
+tuples in children, which are concatenated:
+
+```python
+Div(a=[1,2,3], [4,5,6])
+# => <div a='[1, 2, 3]'>[4, 5, 6]</div>
+```
+
 The HTML is represented as UTF-8. The bytes can be extracted / converted to str with:
 
 ```python
@@ -135,6 +143,5 @@ Also when returning data inside a handler, use ```.bytes()``` to convert it into
 Some missing features:
 - Large table benchmarks with headers
 - svg namespace
-- call str automatically for children and attr values
 - attrs should get attributes
 - children should extract children from text

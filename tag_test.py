@@ -30,7 +30,10 @@ assert_equal(Div("value").tag, 'div')
 assert_equal(Div("hello\nworld"), HTML('<div>\n  hello\n  world\n</div>'))
 assert_equal(Pre("hello\nworld"), HTML('<pre>hello\nworld</pre>'))
 assert_equal(Div(("hello", ("world", "nested"))), HTML('<div>\nhello\n\nworld\nnested</div>'))
-
+assert_equal(Div(({"a": 2})), HTML("<div>{'a': 2}</div>"))
+assert_equal(Div(["a", 2]), HTML("<div>['a', 2]</div>"))
+assert_equal(Div(a=[1,2]), HTML('<div a="[1, 2]"></div>'))
+assert_equal(Div(a=["'",'"']), HTML('''<div a="[&quot;'&quot;, '&quot;']"></div>'''))
 
 print(
     Div(

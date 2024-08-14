@@ -294,7 +294,24 @@ int estimate_object_length(PyObject* obj) {
     }
 }
 
-void append_item_to_html(char* result, int* l, PyObject* item, int indent, char disable_indent, int i)
+int reserve(int new_size, HTMLObject** result_obj, int *reserved, char** result) {
+    if (new_size > *reserved) {
+        *reserved = 4 * (*reserved);
+        if (*reserved < new_size) {
+            *reserved = 4 * new_size;
+        }
+        *result_obj = (HTMLObject*)PyObject_Realloc(
+            *result_obj, _PyObject_SIZE(&HTML_Type) + *reserved);
+        if (!*result_obj) {
+            return 0;
+        }
+        *result = (*result_obj)->data;
+    }
+    return 1;
+}
+
+void append_item_to_html(int* l, PyObject* item, int indent, char disable_indent, int i,
+     HTMLObject** result_obj, int *reserved, char** result)
 {
     // if bytearray, just copy
     if (PyBytes_Check(item) || HTMLObject_Check(item)) {
@@ -308,94 +325,110 @@ void append_item_to_html(char* result, int* l, PyObject* item, int indent, char 
             item_str = html_obj->data;
             size = html_obj->size;
         }
+        reserve(*l + size + 22 + (indent >=0 ? indent : 0), result_obj, reserved, result);
         if (indent >= 0) {
             for (int j = 0; j < size; j++) {
-                result[(*l)++] = item_str[j];
+                (*result)[(*l)++] = item_str[j];
                 if (item_str[j] == '\n') {
                     for (int k = 0; k < indent; k++) {
-                        result[(*l)++] = ' ';
+                        (*result)[(*l)++] = ' ';
                     }
                 }
             }
         } else {
             for (int j = 0; j < size; j++) {
-                result[(*l)++] = item_str[j];
+                (*result)[(*l)++] = item_str[j];
             }
 
         }
     } else if (PyLong_Check(item)) {
         if (indent < 0 && i > 1) {
-            result[(*l)++] = ' ';
+            (*result)[(*l)++] = ' ';
         }
         long long_value = PyLong_AsLong(item);
         char long_str[20];
         sprintf(long_str, "%ld", long_value);
         char *long_strp = long_str;
         while (*long_strp) {
-            result[(*l)++] = *(long_strp++);
+            (*result)[(*l)++] = *(long_strp++);
         }
     } else if (PyFloat_Check(item)) {
         if (indent < 0 && i > 1) {
-            result[(*l)++] = ' ';
+            (*result)[(*l)++] = ' ';
         }
         double double_value = PyFloat_AsDouble(item);
         char double_str[20];
         sprintf(double_str, "%g", double_value);
         char *double_strp = double_str;
         while (*double_strp) {
-            result[(*l)++] = *(double_strp++);
+            (*result)[(*l)++] = *(double_strp++);
         }
     } else if (PyTuple_Check(item)) {
         Py_ssize_t num_args = PyTuple_Size(item);
         for (Py_ssize_t j = 0; j < num_args; j++) {
-            result[(*l)++] = '\n';
+            (*result)[(*l)++] = '\n';
             PyObject* subitem = PyTuple_GetItem(item, j);
-            append_item_to_html(result, l, subitem, indent, disable_indent, i);
+            append_item_to_html(l, subitem, indent, disable_indent, i, result_obj, reserved, result);
         }
     } else {
         if (indent < 0 && i > 1) {
-            result[(*l)++] = ' ';
+            (*result)[(*l)++] = ' ';
+        }
+        // convert to string if necessary
+        int converted = 0;
+        if (!PyUnicode_Check(item)) {
+            item = PyObject_Str(item);
+            converted = 1;
+            if (!item) {
+                return;
+            }
         }
         const char* item_str = PyUnicode_AsUTF8(item);
+        int size = strlen(item_str);
+        reserve(*l + size*(indent >=4 ? indent : 4) + 22 , result_obj, reserved, result);
+
         if (indent > 0 && !disable_indent) {
             for (int j = 0; item_str[j] != '\0'; j++) {
                 if (item_str[j] == '<') {
-                    result[(*l)++] = '&';
-                    result[(*l)++] = 'l';
-                    result[(*l)++] = 't';
-                    result[(*l)++] = ';';
+                    (*result)[(*l)++] = '&';
+                    (*result)[(*l)++] = 'l';
+                    (*result)[(*l)++] = 't';
+                    (*result)[(*l)++] = ';';
                 } else if (item_str[j] == '&') {
-                    result[(*l)++] = '&';
-                    result[(*l)++] = 'a';
-                    result[(*l)++] = 'm';
-                    result[(*l)++] = 'p';
-                    result[(*l)++] = ';';
+                    (*result)[(*l)++] = '&';
+                    (*result)[(*l)++] = 'a';
+                    (*result)[(*l)++] = 'm';
+                    (*result)[(*l)++] = 'p';
+                    (*result)[(*l)++] = ';';
                 } else if (item_str[j] == '\n') {
-                    result[(*l)++] = '\n';
+                    (*result)[(*l)++] = '\n';
                     for (int k = 0; k < indent; k++) {
-                        result[(*l)++] = ' ';
+                        (*result)[(*l)++] = ' ';
                     }
                 } else {
-                    result[(*l)++] = item_str[j];
+                    (*result)[(*l)++] = item_str[j];
                 }
             }
         } else {
             for (int j = 0; item_str[j] != '\0'; j++) {
                 if (item_str[j] == '<') {
-                    result[(*l)++] = '&';
-                    result[(*l)++] = 'l';
-                    result[(*l)++] = 't';
-                    result[(*l)++] = ';';
+                    (*result)[(*l)++] = '&';
+                    (*result)[(*l)++] = 'l';
+                    (*result)[(*l)++] = 't';
+                    (*result)[(*l)++] = ';';
                 } else if (item_str[j] == '&') {
-                    result[(*l)++] = '&';
-                    result[(*l)++] = 'a';
-                    result[(*l)++] = 'm';
-                    result[(*l)++] = 'p';
-                    result[(*l)++] = ';';
+                    (*result)[(*l)++] = '&';
+                    (*result)[(*l)++] = 'a';
+                    (*result)[(*l)++] = 'm';
+                    (*result)[(*l)++] = 'p';
+                    (*result)[(*l)++] = ';';
                 } else {
-                    result[(*l)++] = item_str[j];
+                    (*result)[(*l)++] = item_str[j];
                 }
             }
+        }
+        if (converted) {
+            Py_DECREF(item);
         }
     }
 }
@@ -403,9 +436,6 @@ void append_item_to_html(char* result, int* l, PyObject* item, int indent, char 
 static PyObject* fasttag_tag_impl(const char* tag, PyObject* args, char skip_first, PyObject* kwargs) {
     PyObject *key, *value;
     Py_ssize_t pos = 0;
-
-    // Calculate the total length needed
-    Py_ssize_t total_length = 0;
 
     // Process args
     Py_ssize_t num_args = PyTuple_Size(args);
@@ -415,49 +445,15 @@ static PyObject* fasttag_tag_impl(const char* tag, PyObject* args, char skip_fir
         return NULL;
     }
     int inner_text_multiplier = (indent >= 0) ? (indent + 1) : 1;
-    for (Py_ssize_t i = 0; i < num_args; i++) {
-        PyObject* item = PyTuple_GetItem(args, i);
-        int object_length = estimate_object_length(item);
-        if (object_length < 0) {
-            return NULL;
-        }
-        total_length += object_length;
-    }
-    if (num_args > 0) {
-        total_length += (num_args - 1);
-    }
-
-    if (kwargs) {
-        // Process kwargs
-        while (PyDict_Next(kwargs, &pos, &key, &value)) {
-            if (!PyUnicode_Check(key)) {
-                PyErr_SetString(PyExc_TypeError, "All keyword argument keys must be strings");
-                return NULL;
-            }
-            if (!PyUnicode_Check(value) && !PyBool_Check(value) && !PyLong_Check(value) && !PyFloat_Check(value)) {
-                PyErr_SetString(PyExc_TypeError, "All keyword argument values must be strings or booleans or numbers");
-                return NULL;
-            }
-            total_length += PyUnicode_GetLength(key);
-            if (PyUnicode_Check(value)) {
-                total_length += PyUnicode_GetLength(value);
-            } else if (PyLong_Check(value)) {
-                total_length += 20;
-            } else if (PyFloat_Check(value)) {
-                total_length += 20;
-            }
-            total_length += 1; // For the "=" sign
-        }
-        if (PyDict_Size(kwargs) > 0 && num_args > 0) {
-            total_length += PyDict_Size(kwargs);
-        }
-    }
 
     // Allocate memory for the new string
 
-    HTMLObject *result_obj = (HTMLObject*)HTML_alloc(&HTML_Type, 4*total_length + 10);
+    // 100 -> 0.17ms, 200 -> 0.17ms
+    // 1000 -> 0.19ms
+    // 100->1000: 0.25ms
+    int reserved = 200;
+    HTMLObject *result_obj = (HTMLObject*)HTML_alloc(&HTML_Type, reserved);
     char* result = result_obj->data;
-    // char* result = (char*)malloc(4*total_length + 10);
 
     if (!result) {
         return PyErr_NoMemory();
@@ -466,7 +462,8 @@ static PyObject* fasttag_tag_impl(const char* tag, PyObject* args, char skip_fir
     // Copy args and kwargs into the new string
     int l = 0;
     result[l++] = '<';
-   
+    int extra = 22 + (indent >= 0 ? indent : 0);
+    reserve(strlen(tag) + l, &result_obj, &reserved, &result);
     char *tagp = (char*)tag;
     while (*tagp) {
         result[l++] = *(tagp++);
@@ -483,6 +480,7 @@ static PyObject* fasttag_tag_impl(const char* tag, PyObject* args, char skip_fir
 
             result[l++] = ' ';
             const char *key_str = PyUnicode_AsUTF8(key);
+            reserve(strlen(key_str) + l + extra, &result_obj, &reserved, &result);
 
             if (key_str[0] == '_') {
                 if (key_str[1] != '\0') {
@@ -524,7 +522,15 @@ static PyObject* fasttag_tag_impl(const char* tag, PyObject* args, char skip_fir
                     result[l++] = *(double_strp++);
                 }
             } else {
+                // convert to string if necessary
+                if (!PyUnicode_Check(value)) {
+                    value = PyObject_Str(value);
+                    if (!value) {
+                        return NULL;
+                    }
+                }
                 const char *value_str = PyUnicode_AsUTF8(value);
+                reserve(strlen(value_str)*4 + l + extra, &result_obj, &reserved, &result);
                 while (*value_str) {
                     // handle " and &
                     if (*value_str == '&') {
@@ -544,6 +550,9 @@ static PyObject* fasttag_tag_impl(const char* tag, PyObject* args, char skip_fir
                         result[l++] = *value_str;
                     }
                     value_str++;
+                }
+                if (PyUnicode_Check(value)) {
+                    Py_DECREF(value);
                 }
             }
             result[l++] = '"';
@@ -585,8 +594,7 @@ static PyObject* fasttag_tag_impl(const char* tag, PyObject* args, char skip_fir
             }
         }
         PyObject* item = PyTuple_GetItem(args, i);
-        append_item_to_html(result, &l, item, indent, disable_indent, i);
-        
+        append_item_to_html(&l, item, indent, disable_indent, i, &result_obj, &reserved, &result);
     }
     if (!is_self_closing_tag(tag)) {
         if (indent >= 0 && !disable_indent) {
@@ -605,14 +613,6 @@ static PyObject* fasttag_tag_impl(const char* tag, PyObject* args, char skip_fir
     result[l] = '\0';
     result_obj = HTMLObjectShrink(result_obj, l);
 
-    // int create_bytes = 0;
-    // PyObject *result_obj;
-    // if (create_bytes) {
-    //     result_obj = PyBytes_FromStringAndSize(result, l);
-    // } else {
-    //     result_obj = HTMLObjectFromStringAndSize(result, l);
-    // }
-    // free(result);
     return (PyObject *)result_obj;
 }
 

@@ -148,6 +148,7 @@ Also when returning data inside a handler, use ```.bytes()``` to convert it into
 ## TODO:
 Some missing features:
 - Large table benchmarks with headers
-- support tuples
 - svg namespace
-- call str automatically
+- call str automatically for children and attr values
+- attrs should get attributes
+- children should extract children from text
