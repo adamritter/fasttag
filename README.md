@@ -85,6 +85,11 @@ DOCTYPE + Html(Head(Title("Hello"), Body("Hello, world")))
 </html>
 ```
 
+Tag attribute can be used to get the tag
+```python
+Div("hello").tag # => "div"
+```
+
 ### Changing indentation
 
 Indentation can be set with fasttag.set_indent.
@@ -100,7 +105,7 @@ Div("hello", Span("world"))
 ```
 
 ## Using with FastHTML:
-FastTag was built to mostly mirror FastHTML API. One important missing feature is automatically concatenating tuples.
+FastTag was built to mostly mirror FastHTML API. One important missing feature is automatically concatenating tuples / convert all data types with str().
 
 To use it, just import fasttag after fasthtml.common:
 
@@ -125,3 +130,11 @@ Also when returning data inside a handler, use ```.bytes()``` to convert it into
                jinja2 latency:  6.83us     40x
 ```
 
+
+## TODO:
+Some missing features:
+- Large table benchmarks with headers
+- svg namespace
+- call str automatically for children and attr values
+- attrs should get attributes
+- children should extract children from text

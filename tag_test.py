@@ -26,6 +26,10 @@ assert_equal(Text("This is an <example> of text"), HTML("This is an &lt;example>
 assert_equal(DOCTYPE, HTML("<!DOCTYPE html>\n"))
 assert_equal(Div(_="value"), HTML('<div _="value"></div>'))
 assert_equal(Div(_="value").__html__(), '<div _="value"></div>')
+assert_equal(Div("value").tag, 'div')
+assert_equal(Div("hello\nworld"), HTML('<div>\n  hello\n  world\n</div>'))
+assert_equal(Pre("hello\nworld"), HTML('<pre>hello\nworld</pre>'))
+assert_equal(Div(("hello", ("world", "nested"))), HTML('<div>\nhello\n\nworld\nnested</div>'))
 
 
 print(

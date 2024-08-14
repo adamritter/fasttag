@@ -2,8 +2,10 @@
 #include <Python.h>
 #include <string.h>
 
-// TODO: object, ?tuple?
-// TODO: Text node, SVG namespace, variable size HTMLObject, probably 1 malloc + 1 realloc shrink is better
+// TODO: simpler memory management: malloc 32k buffer, realloc if needed
+// TODO: object
+// TODO: SVG namespace
+// Right now: benchmark: 0.18ms
 
 // Define the structure for the custom type
 typedef struct {
@@ -171,6 +173,25 @@ static PyObject* HTML_self(PyObject* self) {
     return self;
 }
 
+static PyObject * HTML_get_tag(HTMLObject *self) {
+    char *tag = self->data;
+    if (tag[0] != '<') {
+        return PyUnicode_FromStringAndSize("", 0);
+    }
+    tag++;
+    char *tag_end = tag;
+    while (*tag_end != ' ' && *tag_end != '>' && *tag_end != '\0') {
+        tag_end++;
+    }
+    return PyUnicode_FromStringAndSize(tag, tag_end - tag);
+}
+
+static PyGetSetDef HTML_getsetters[] = {
+    {"tag", (getter)HTML_get_tag, NULL, "tag attribute", NULL},
+    {NULL}  /* Sentinel */
+};
+
+
 // Method table for the custom type
 static PyMethodDef HTML_methods[] = {
     {"bytes", (PyCFunction)HTML_bytes, METH_NOARGS, "Return the data attribute"},
@@ -195,6 +216,7 @@ static PyTypeObject HTML_Type = {
     .tp_repr = HTML_repr,
     .tp_as_number = &HTML_as_number,
     .tp_richcompare = HTML_richcompare,
+    .tp_getset = HTML_getsetters,
 };
 
 int indent = 2;
@@ -241,6 +263,143 @@ int is_self_closing_tag(const char *tag) {
     return 0;
 }
 
+int estimate_object_length(PyObject* obj) {
+    if (PyUnicode_Check(obj)) {
+        return PyUnicode_GetLength(obj);
+    } else if (PyBytes_Check(obj)) {
+        return PyBytes_Size(obj);
+    } else if (HTMLObject_Check(obj)) {
+        HTMLObject* html_obj = (HTMLObject*)obj;
+        return html_obj->size;
+    } else if (PyLong_Check(obj)) {
+        return 20;
+    } else if (PyFloat_Check(obj)) {
+        return 20;
+    } else if (PyTuple_Check(obj)) {
+        Py_ssize_t num_args = PyTuple_Size(obj);
+        int total_length = 0;
+        for (Py_ssize_t i = 0; i < num_args; i++) {
+            PyObject* item = PyTuple_GetItem(obj, i);
+            int object_length = estimate_object_length(item);
+            if (object_length < 0) {
+                return -1;
+            }
+            total_length += object_length;
+        }
+        total_length += num_args;
+        return total_length;
+    } else {
+        PyErr_SetString(PyExc_TypeError, "All arguments must be strings or bytes or number");
+        return -1;
+    }
+}
+
+void append_item_to_html(char* result, int* l, PyObject* item, int indent, char disable_indent, int i)
+{
+    // if bytearray, just copy
+    if (PyBytes_Check(item) || HTMLObject_Check(item)) {
+        char *item_str;
+        int size;
+        if(PyBytes_Check(item)) {
+            item_str = PyBytes_AsString(item);
+            size = PyBytes_Size(item);
+        } else {
+            HTMLObject* html_obj = (HTMLObject*)item;
+            item_str = html_obj->data;
+            size = html_obj->size;
+        }
+        if (indent >= 0) {
+            for (int j = 0; j < size; j++) {
+                result[(*l)++] = item_str[j];
+                if (item_str[j] == '\n') {
+                    for (int k = 0; k < indent; k++) {
+                        result[(*l)++] = ' ';
+                    }
+                }
+            }
+        } else {
+            for (int j = 0; j < size; j++) {
+                result[(*l)++] = item_str[j];
+            }
+
+        }
+    } else if (PyLong_Check(item)) {
+        if (indent < 0 && i > 1) {
+            result[(*l)++] = ' ';
+        }
+        long long_value = PyLong_AsLong(item);
+        char long_str[20];
+        sprintf(long_str, "%ld", long_value);
+        char *long_strp = long_str;
+        while (*long_strp) {
+            result[(*l)++] = *(long_strp++);
+        }
+    } else if (PyFloat_Check(item)) {
+        if (indent < 0 && i > 1) {
+            result[(*l)++] = ' ';
+        }
+        double double_value = PyFloat_AsDouble(item);
+        char double_str[20];
+        sprintf(double_str, "%g", double_value);
+        char *double_strp = double_str;
+        while (*double_strp) {
+            result[(*l)++] = *(double_strp++);
+        }
+    } else if (PyTuple_Check(item)) {
+        Py_ssize_t num_args = PyTuple_Size(item);
+        for (Py_ssize_t j = 0; j < num_args; j++) {
+            result[(*l)++] = '\n';
+            PyObject* subitem = PyTuple_GetItem(item, j);
+            append_item_to_html(result, l, subitem, indent, disable_indent, i);
+        }
+    } else {
+        if (indent < 0 && i > 1) {
+            result[(*l)++] = ' ';
+        }
+        const char* item_str = PyUnicode_AsUTF8(item);
+        if (indent > 0 && !disable_indent) {
+            for (int j = 0; item_str[j] != '\0'; j++) {
+                if (item_str[j] == '<') {
+                    result[(*l)++] = '&';
+                    result[(*l)++] = 'l';
+                    result[(*l)++] = 't';
+                    result[(*l)++] = ';';
+                } else if (item_str[j] == '&') {
+                    result[(*l)++] = '&';
+                    result[(*l)++] = 'a';
+                    result[(*l)++] = 'm';
+                    result[(*l)++] = 'p';
+                    result[(*l)++] = ';';
+                } else if (item_str[j] == '\n') {
+                    result[(*l)++] = '\n';
+                    for (int k = 0; k < indent; k++) {
+                        result[(*l)++] = ' ';
+                    }
+                } else {
+                    result[(*l)++] = item_str[j];
+                }
+            }
+        } else {
+            for (int j = 0; item_str[j] != '\0'; j++) {
+                if (item_str[j] == '<') {
+                    result[(*l)++] = '&';
+                    result[(*l)++] = 'l';
+                    result[(*l)++] = 't';
+                    result[(*l)++] = ';';
+                } else if (item_str[j] == '&') {
+                    result[(*l)++] = '&';
+                    result[(*l)++] = 'a';
+                    result[(*l)++] = 'm';
+                    result[(*l)++] = 'p';
+                    result[(*l)++] = ';';
+                } else {
+                    result[(*l)++] = item_str[j];
+                }
+            }
+        }
+    }
+}
+
 static PyObject* fasttag_tag_impl(const char* tag, PyObject* args, char skip_first, PyObject* kwargs) {
     PyObject *key, *value;
     Py_ssize_t pos = 0;
@@ -258,21 +417,11 @@ static PyObject* fasttag_tag_impl(const char* tag, PyObject* args, char skip_fir
     int inner_text_multiplier = (indent >= 0) ? (indent + 1) : 1;
     for (Py_ssize_t i = 0; i < num_args; i++) {
         PyObject* item = PyTuple_GetItem(args, i);
-        if (PyUnicode_Check(item)) {
-            total_length += PyUnicode_GetLength(item) * inner_text_multiplier;
-        } else if (PyBytes_Check(item)) {
-            total_length += PyBytes_Size(item) * inner_text_multiplier;
-        } else if (HTMLObject_Check(item)) {
-            HTMLObject* html_obj = (HTMLObject*)item;
-            total_length += html_obj->size * inner_text_multiplier;
-        } else if (PyLong_Check(item)) {
-            total_length += 20;
-        } else if (PyFloat_Check(item)) {
-            total_length += 20;
-        } else {
-            PyErr_SetString(PyExc_TypeError, "All arguments must be strings or bytes or number");
+        int object_length = estimate_object_length(item);
+        if (object_length < 0) {
             return NULL;
         }
+        total_length += object_length;
     }
     if (num_args > 0) {
         total_length += (num_args - 1);
@@ -424,6 +573,10 @@ static PyObject* fasttag_tag_impl(const char* tag, PyObject* args, char skip_fir
         disable_indent = 1;
     }
 
+    if (!strcmp(tag, "pre")) {
+        disable_indent = 1;
+    }
+
     for (Py_ssize_t i = (skip_first ? 1 : 0); i < num_args; i++) {
         if (indent >= 0 && !disable_indent) {
             result[l++] = '\n';
@@ -432,100 +585,8 @@ static PyObject* fasttag_tag_impl(const char* tag, PyObject* args, char skip_fir
             }
         }
         PyObject* item = PyTuple_GetItem(args, i);
-        // if bytearray, just copy
-        if (PyBytes_Check(item) || HTMLObject_Check(item)) {
-            char *item_str;
-            int size;
-            if(PyBytes_Check(item)) {
-                item_str = PyBytes_AsString(item);
-                size = PyBytes_Size(item);
-            } else {
-                HTMLObject* html_obj = (HTMLObject*)item;
-                item_str = html_obj->data;
-                size = html_obj->size;
-            }
-            if (indent >= 0) {
-                for (int j = 0; j < size; j++) {
-                    result[l++] = item_str[j];
-                    if (item_str[j] == '\n') {
-                        for (int k = 0; k < indent; k++) {
-                            result[l++] = ' ';
-                        }
-                    }
-                }
-            } else {
-                for (int j = 0; j < size; j++) {
-                    result[l++] = item_str[j];
-                }
-            }
-        } else if (PyLong_Check(item)) {
-            if (indent < 0 && i > 1) {
-                result[l++] = ' ';
-            }
-            long long_value = PyLong_AsLong(item);
-            char long_str[20];
-            sprintf(long_str, "%ld", long_value);
-            char *long_strp = long_str;
-            while (*long_strp) {
-                result[l++] = *(long_strp++);
-            }
-        } else if (PyFloat_Check(item)) {
-            if (indent < 0 && i > 1) {
-                result[l++] = ' ';
-            }
-            double double_value = PyFloat_AsDouble(item);
-            char double_str[20];
-            sprintf(double_str, "%g", double_value);
-            char *double_strp = double_str;
-            while (*double_strp) {
-                result[l++] = *(double_strp++);
-            }
-        } else {
-            if (indent < 0 && i > 1) {
-                result[l++] = ' ';
-            }
-            const char* item_str = PyUnicode_AsUTF8(item);
-            if (indent > 0 && !disable_indent) {
-                for (int j = 0; item_str[j] != '\0'; j++) {
-                    if (item_str[j] == '<') {
-                        result[l++] = '&';
-                        result[l++] = 'l';
-                        result[l++] = 't';
-                        result[l++] = ';';
-                    } else if (item_str[j] == '&') {
-                        result[l++] = '&';
-                        result[l++] = 'a';
-                        result[l++] = 'm';
-                        result[l++] = 'p';
-                        result[l++] = ';';
-                    } else if (item_str[j] == '\n') {
-                        result[l++] = '\n';
-                        for (int k = 0; k < indent; k++) {
-                            result[l++] = ' ';
-                        }
-                    } else {
-                        result[l++] = item_str[j];
-                    }
-                }
-            } else {
-                for (int j = 0; item_str[j] != '\0'; j++) {
-                    if (item_str[j] == '<') {
-                        result[l++] = '&';
-                        result[l++] = 'l';
-                        result[l++] = 't';
-                        result[l++] = ';';
-                    } else if (item_str[j] == '&') {
-                        result[l++] = '&';
-                        result[l++] = 'a';
-                        result[l++] = 'm';
-                        result[l++] = 'p';
-                        result[l++] = ';';
-                    } else {
-                        result[l++] = item_str[j];
-                    }
-                }
-            }
-        }
+        append_item_to_html(result, &l, item, indent, disable_indent, i);
+        
     }
     if (!is_self_closing_tag(tag)) {
         if (indent >= 0 && !disable_indent) {
