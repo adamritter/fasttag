@@ -36,9 +36,14 @@ assert_equal(fasthtml.common.to_xml(fasthtml.common.Div("Hello &", "world <3")),
 assert_equal(lxml_text_div(), b'<div>Hello &amp; world &lt;3</div>')
 assert_equal(template.render(text="Hello &", text2="world <3"), "<div>Hello &amp; world &lt;3</div>")
 
-b200 = "q" * 195
-print("         fasttag200 latency: ", latency1000000(lambda: fasttag.Div(b200).bytes()), "us")
+hw1000 = ["hello world" for _ in range(1000)]
+print("   fasttag1000x1000 latency: ", latency1000(lambda: fasttag.Div(*hw1000).bytes()), "us")
+print("      join1000x1000 latency: ", latency1000(lambda: ''.join(hw1000)), "us")
+print("join+html.escape 1000x1000 latency: ", latency1000(lambda: "".join(["<div>", *[html.escape(x) for x in hw1000], "</div>"])), "us")
+print("        fasthtml 1000x1000 latency: ", latency1000(lambda: fasthtml.common.to_xml(fasthtml.common.Div(*hw1000))), "us")
 
+print("         fasttag200 latency: ", latency1000000(lambda: fasttag.Div("q" * 195).bytes()), "us")
+print("            join latency: ", latency1000000(lambda: ''.join(["Hello &", "world <3"])), "us")
 print("         fasttag latency: ", latency1000000(lambda: fasttag.Div("Hello &", "world <3").bytes()), "us")
 print("join+html.escape latency: ", latency1000000(lambda: "".join(["<div>", html.escape("Hello &"), html.escape(" world <3"), "</div>"])), "us")
 print("        dominate latency: ", latency1000000(lambda: str(dominate.tags.div("Hello &", "world <3"))), "us")

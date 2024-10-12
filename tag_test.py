@@ -1,7 +1,8 @@
-import sys
+import sys, pickle
 sys.path.append("build/lib.macosx-14.5-arm64-cpython-312")
 import fasttag
 from fasttag import *
+import fasthtml.common
 
 fasttag.set_indent(-1)
 def assert_equal(a, b): assert a == b, (a, b)
@@ -34,6 +35,19 @@ assert_equal(Div(({"a": 2})), HTML("<div>{'a': 2}</div>"))
 assert_equal(Div(["a", 2]), HTML("<div>['a', 2]</div>"))
 assert_equal(Div(a=[1,2]), HTML('<div a="[1, 2]"></div>'))
 assert_equal(Div(a=["'",'"']), HTML('''<div a="[&quot;'&quot;, '&quot;']"></div>'''))
+assert_equal(Div(fasthtml.common.Span("hello")), HTML("<div><span>hello</span>\n  </div>"))
+assert_equal(Div("value", a="b", ccc="d", and2="tom&jerry").attrs,
+             {"a": "b", "ccc": "d", "and2": "tom&jerry"})
+
+class HTML_Test:
+    def __html__(self):
+        return "hello"
+
+assert_equal(Div(HTML_Test()), HTML("<div>hello</div>"))
+
+a = HTML("<p>hello</p>")
+assert_equal(pickle.loads(pickle.dumps(a)), a)
+
 
 print(
     Div(

@@ -186,15 +186,163 @@ static PyObject * HTML_get_tag(HTMLObject *self) {
     return PyUnicode_FromStringAndSize(tag, tag_end - tag);
 }
 
+static PyObject * HTML_get_attrs(HTMLObject *self) {
+    char *tag = self->data;
+    if (tag[0] != '<') {
+        return PyUnicode_FromStringAndSize("", 0);
+    }
+    // allocate temporary space for unescaped string
+    char *unescaped = (char*)malloc(self->size + 1);
+    tag++;
+    // skip tag
+    while (*tag != ' ' && *tag != '>' && *tag != '\0') {
+        tag++;
+    }
+    // Create a dict
+    PyObject *dict = PyDict_New();
+    while (*tag != '>' && *tag != '\0') {
+        // Skip whitespace
+        while (*tag == ' ') {
+            tag++;
+        }
+        // Find the key
+        char *key = tag;
+        while (*tag != '=' && *tag != ' ' && *tag != '>' && *tag != '\0') {
+            tag++;
+        }
+        PyObject *key_str = PyUnicode_FromStringAndSize(key, tag - key);
+        if (*tag == '>' || *tag == '\0') {
+            PyDict_SetItem(dict, key_str, Py_True);
+            Py_DECREF(key_str);
+            break;
+        }
+        // Skip whitespace
+        while (*tag == ' ') {
+            tag++;
+        }
+        // Skip =
+        tag++;
+        // Skip whitespace
+        while (*tag == ' ') {
+            tag++;
+        }
+        // Find the value
+        char *end = unescaped;
+        if (*tag == '"') {
+            tag++;
+            // unescape value
+            while (*tag != '"' && *tag != '\0') {
+                if (*tag == '&') {
+                    if (tag[1] == 'l' && tag[2] == 't' && tag[3] == ';') {
+                        *end++ = '<';
+                        tag += 4;
+                    } else if (tag[1] == 'a' && tag[2] == 'm' && tag[3] == 'p' && tag[4] == ';') {
+                        *end++ = '&';
+                        tag += 5;
+                    } else {
+                        *end++ = *tag++;
+                    }
+                } else {
+                    *end++ = *tag++;
+                }
+            }
+            *end = '\0';
+            PyObject *value_str = PyUnicode_FromStringAndSize(unescaped, end - unescaped);
+            PyDict_SetItem(dict, key_str, value_str);
+            Py_DECREF(value_str);
+            if (*tag == '\0') {
+                break;
+            }
+            tag++;
+        } else {
+            char *value = tag;
+            while (*tag != ' ' && *tag != '>' && *tag != '\0') {
+                tag++;
+            }
+            PyObject *value_str = PyUnicode_FromStringAndSize(value, tag - value);
+            PyDict_SetItem(dict, key_str, value_str);
+            Py_DECREF(value_str);
+        }
+        Py_DECREF(key_str);
+    }
+    free(unescaped);
+    return dict;
+}
+
+// TODO: finish implementation
+// static PyObject * HTML_get_children(HTMLObject *self) {
+//     char *tag = self->data;
+//     if (tag[0] != '<') {
+//         return PyUnicode_FromStringAndSize("", 0);
+//     }
+//     // skip tag
+//     while (*tag != ' ' && *tag != '>' && *tag != '\0') {
+//         tag++;
+//     }
+//     // skip attributes
+//     while (*tag != '>' && *tag != '\0') {
+//         if (*tag == '"') {
+//             tag++;
+//             while (*tag != '"' && *tag != '\0') {
+//                 tag++;
+//             }
+//             if (*tag == '\0') {
+//                 return PyUnicode_FromStringAndSize("", 0);
+//             }
+//         }
+//         tag++;
+//     }
+//     if (*tag == '\0') {
+//         return PyUnicode_FromStringAndSize("", 0);
+//     }
+//     tag++;
+//     // skip whitespace
+//     while (*tag == ' ') {
+//         tag++;
+//     }
+//     // find end tag
+//     char *end_tag = tag;
+//     while (*end_tag != '<' && *end_tag != '\0') {
+//         end_tag++;
+//     }
+//     // return PyUnicode_FromStringAndSize(tag, end_tag - tag);
+//     // Create a tuple
+    
+// }
+
 static PyGetSetDef HTML_getsetters[] = {
     {"tag", (getter)HTML_get_tag, NULL, "tag attribute", NULL},
+    {"attrs", (getter)HTML_get_attrs, NULL, "attrs attribute", NULL},
+    // {"children", (getter)HTML_get_children, NULL, "children attribute", NULL},
     {NULL}  /* Sentinel */
 };
 
+static PyObject* HTML_reduce(HTMLObject* self) {
+    PyTupleObject* tuple = (PyTupleObject*)PyTuple_New(1);
+    if (!tuple) {
+        return NULL;
+    }
+    PyObject *bytes = PyBytes_FromStringAndSize(self->data, self->size);
+    if (!bytes) {
+        Py_DECREF(tuple);
+        return NULL;
+    }
+    PyTuple_SetItem((PyObject*)tuple, 0, bytes);
+    PyTupleObject* result = (PyTupleObject*)PyTuple_New(2);
+    if (!result) {
+        Py_DECREF(tuple);
+        return NULL;
+    }
+    Py_INCREF(Py_TYPE(self));  // Increment reference count before putting in the tuple
+    PyTuple_SetItem((PyObject*)result, 0, (PyObject*)Py_TYPE(self));
+    PyTuple_SetItem((PyObject*)result, 1, (PyObject*)tuple);
+    return (PyObject*)result;
+}
 
 // Method table for the custom type
 static PyMethodDef HTML_methods[] = {
     {"bytes", (PyCFunction)HTML_bytes, METH_NOARGS, "Return the data attribute"},
+    {"__reduce__", (PyCFunction)HTML_reduce, METH_NOARGS, "Return a tuple for pickling"},
     {"__html__", (PyCFunction)HTML_str, METH_NOARGS, "Return the data attribute as string"},
     {"__ft__", (PyCFunction)HTML_self, METH_NOARGS, "Return self"},
     {NULL} // Sentinel
@@ -309,86 +457,35 @@ void reserve(int new_size, HTMLObject** result_obj, int *reserved, char** result
     }
 }
 
-void append_item_to_html(int* l, PyObject* item, int indent, char disable_indent, int i,
-     HTMLObject** result_obj, int *reserved, char** result)
-{
-    // if bytearray, just copy
-    if (PyBytes_Check(item) || HTMLObject_Check(item)) {
-        char *item_str;
-        int size;
-        if(PyBytes_Check(item)) {
-            item_str = PyBytes_AsString(item);
-            size = PyBytes_Size(item);
-        } else {
-            HTMLObject* html_obj = (HTMLObject*)item;
-            item_str = html_obj->data;
-            size = html_obj->size;
-        }
-        reserve(*l + size  * (indent >=1 ? indent : 1) + 22, result_obj, reserved, result);
-        if (!*result_obj) {
-            return;
-        }
-        if (indent >= 0) {
-            for (int j = 0; j < size; j++) {
-                (*result)[(*l)++] = item_str[j];
-                if (item_str[j] == '\n') {
-                    for (int k = 0; k < indent; k++) {
-                        (*result)[(*l)++] = ' ';
-                    }
+void append_bytes(int* l, const char* item, int size, int indent, int *reserved, HTMLObject** result_obj, char** result) {
+    reserve(*l + size * (indent >= 1 ? indent : 1) + 22, result_obj, reserved, result);
+    if (!*result_obj) {
+        return;
+    }
+    if (indent >= 0) {
+        for (int j = 0; j < size; j++) {
+            (*result)[(*l)++] = item[j];
+            if (item[j] == '\n') {
+                for (int k = 0; k < indent; k++) {
+                    (*result)[(*l)++] = ' ';
                 }
-            }
-        } else {
-            for (int j = 0; j < size; j++) {
-                (*result)[(*l)++] = item_str[j];
-            }
-
-        }
-    } else if (PyLong_Check(item)) {
-        if (indent < 0 && i > 1) {
-            (*result)[(*l)++] = ' ';
-        }
-        long long_value = PyLong_AsLong(item);
-        char long_str[20];
-        sprintf(long_str, "%ld", long_value);
-        char *long_strp = long_str;
-        while (*long_strp) {
-            (*result)[(*l)++] = *(long_strp++);
-        }
-    } else if (PyFloat_Check(item)) {
-        if (indent < 0 && i > 1) {
-            (*result)[(*l)++] = ' ';
-        }
-        double double_value = PyFloat_AsDouble(item);
-        char double_str[20];
-        sprintf(double_str, "%g", double_value);
-        char *double_strp = double_str;
-        while (*double_strp) {
-            (*result)[(*l)++] = *(double_strp++);
-        }
-    } else if (PyTuple_Check(item)) {
-        Py_ssize_t num_args = PyTuple_Size(item);
-        for (Py_ssize_t j = 0; j < num_args; j++) {
-            (*result)[(*l)++] = '\n';
-            PyObject* subitem = PyTuple_GetItem(item, j);
-            append_item_to_html(l, subitem, indent, disable_indent, i, result_obj, reserved, result);
-            if (!*result_obj) {
-                return;
             }
         }
     } else {
+        for (int j = 0; j < size; j++) {
+            (*result)[(*l)++] = item[j];
+        }
+    }
+}
+
+void append_item_to_html(int* l, PyObject* item, int indent, char disable_indent, int i,
+     HTMLObject** result_obj, int *reserved, char** result)
+{
+    if (PyUnicode_Check(item)) {
         if (indent < 0 && i > 1) {
             (*result)[(*l)++] = ' ';
         }
-        // convert to string if necessary
-        int converted = 0;
-        if (!PyUnicode_Check(item)) {
-            item = PyObject_Str(item);
-            converted = 1;
-            if (!item) {
-                return;
-            }
-        }
-        const char* item_str = PyUnicode_AsUTF8(item);
+                    const char* item_str = PyUnicode_AsUTF8(item);
         int size = strlen(item_str);
         reserve(*l + size*(indent >=4 ? indent : 4) + 22, result_obj, reserved, result);
         if (!*result_obj) {
@@ -434,10 +531,78 @@ void append_item_to_html(int* l, PyObject* item, int indent, char disable_indent
                     (*result)[(*l)++] = item_str[j];
                 }
             }
+        } 
+    } else if (PyBytes_Check(item) || HTMLObject_Check(item)) {
+        char *item_str;
+        int size;
+        if(PyBytes_Check(item)) {
+            item_str = PyBytes_AsString(item);
+            size = PyBytes_Size(item);
+        } else {
+            HTMLObject* html_obj = (HTMLObject*)item;
+            item_str = html_obj->data;
+            size = html_obj->size;
         }
-        if (converted) {
-            Py_DECREF(item);
+        append_bytes(l, item_str, size, indent, reserved, result_obj, result);
+    } else if (PyLong_Check(item)) {
+        if (indent < 0 && i > 1) {
+            (*result)[(*l)++] = ' ';
         }
+        long long_value = PyLong_AsLong(item);
+        char long_str[20];
+        sprintf(long_str, "%ld", long_value);
+        char *long_strp = long_str;
+        while (*long_strp) {
+            (*result)[(*l)++] = *(long_strp++);
+        }
+    } else if (PyFloat_Check(item)) {
+        if (indent < 0 && i > 1) {
+            (*result)[(*l)++] = ' ';
+        }
+        double double_value = PyFloat_AsDouble(item);
+        char double_str[20];
+        sprintf(double_str, "%g", double_value);
+        char *double_strp = double_str;
+        while (*double_strp) {
+            (*result)[(*l)++] = *(double_strp++);
+        }
+    } else if (PyTuple_Check(item)) {
+        Py_ssize_t num_args = PyTuple_Size(item);
+        for (Py_ssize_t j = 0; j < num_args; j++) {
+            (*result)[(*l)++] = '\n';
+            PyObject* subitem = PyTuple_GetItem(item, j);
+            append_item_to_html(l, subitem, indent, disable_indent, i, result_obj, reserved, result);
+            if (!*result_obj) {
+                return;
+            }
+        }
+    } else if (PyObject_HasAttrString(item, "__html__")) {
+        PyObject* html = PyObject_CallMethod(item, "__html__", NULL);
+        if (!html) {
+            return;
+        }
+        if (!PyUnicode_Check(html)) {
+            return;
+        }
+        const char* item_str = PyUnicode_AsUTF8(html);
+        int size = strlen(item_str);
+        append_bytes(l, item_str, size, indent, reserved, result_obj, result);
+        Py_DECREF(html);
+    } else if (PyObject_HasAttrString(item, "__ft__")) {
+        PyObject* ft = PyObject_CallMethod(item, "__ft__", NULL);
+        if (!ft) {
+            return;
+        }
+        append_item_to_html(l, ft, indent, disable_indent, i, result_obj, reserved, result);
+        Py_DECREF(ft);
+    
+    } else {
+        item = PyObject_Str(item);
+        if (!item) {
+            return;
+        }
+        append_item_to_html(l, item, indent, disable_indent, i, result_obj, reserved, result);
+        Py_DECREF(item);
     }
 }
 

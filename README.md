@@ -112,6 +112,18 @@ Div("hello", Span("world"))
 # => HTML('<div>hello<span>world</span></div>')
 ```
 
+## HTML for custom objects:
+
+Objects can implement the ```.__html__()``` method to return their HTML representation.
+
+```python
+class HTML_Test:
+    def __html__(self):
+        return "hello"
+
+Div(HTML_Test()) # => <div>hello</div>
+```
+
 ## Using with FastHTML:
 FastTag was built to mostly mirror FastHTML API.
 
