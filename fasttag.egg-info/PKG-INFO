@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: fasttag
-Version: 0.1.4
+Version: 0.1.6
 Summary: Extremely fast HTML tag generator
 Home-page: https://github.com/adamritter/fasttag
 Author: Adam Ritter
@@ -124,6 +124,18 @@ from fasttag import *
 set_indent(-1)
 Div("hello", Span("world"))
 # => HTML('<div>hello<span>world</span></div>')
+```
+
+## HTML for custom objects:
+
+Objects can implement the ```.__html__()``` method to return their HTML representation.
+
+```python
+class HTML_Test:
+    def __html__(self):
+        return "hello"
+
+Div(HTML_Test()) # => <div>hello</div>
 ```
 
 ## Using with FastHTML:

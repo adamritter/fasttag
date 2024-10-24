@@ -70,8 +70,8 @@ static PyObject* HTML_new(PyTypeObject* type, PyObject* args, PyObject* kwds) {
     Py_ssize_t length;
     const char *data;
     if (PyUnicode_Check(arg)) {
-        length = PyUnicode_GetLength(arg);
         data = PyUnicode_AsUTF8(arg);
+        length = strlen(data);
     } else if (PyBytes_Check(arg)) {
         length = PyBytes_Size(arg);
         data = PyBytes_AsString(arg);
@@ -816,8 +816,8 @@ static PyObject* fasttag_text(PyObject* self, PyObject* args) {
     int length;
     const char* data;
     if (PyUnicode_Check(arg)) {
-        length = PyUnicode_GetLength(arg);
         data = PyUnicode_AsUTF8(arg);
+        length = strlen(data);
     } else {
         length = PyBytes_Size(arg);
         data = PyBytes_AsString(arg);

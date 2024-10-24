@@ -59,3 +59,26 @@ print(
         # If the keyword argument doesn't start with _, underscores are converted to hypens (-) in the attibute name
         hx_target="this", hx_swap="outerHTML")
     )
+
+
+ss = """<tr id="e8685253296095281136" style="background-color: #d7a748">
+  <td>23</td>
+  <td>
+    <a href="/city/Molino d'Elsa">Molino d'Elsa (IT)</a>
+  </td>
+  <td>
+    <span>
+      18.14°C
+      <br>
+      (19°C / 16°C)
+    </span>
+  </td>
+  <td>1</td>
+  <td>0</td>
+  <td>
+    <a href="#" hx-post="/?city=Molino d'Elsa">update</a>
+  </td>
+  <td>43.3243</td>
+</tr>"""
+
+assert_equal(str(HTML(ss)), ss)
